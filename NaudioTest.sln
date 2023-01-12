@@ -5,16 +5,34 @@ VisualStudioVersion = 16.0.33130.400
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NaudioTest", "NaudioTest\NaudioTest.csproj", "{66C2EC87-62EC-4532-BC43-768A90F551B8}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Lib", "Lib", "{341D12E6-BB59-41F5-AF27-9D79D69EB85A}"
+	ProjectSection(SolutionItems) = preProject
+		Lib\avcodec-59.dll = Lib\avcodec-59.dll
+		Lib\avdevice-59.dll = Lib\avdevice-59.dll
+		Lib\avfilter-8.dll = Lib\avfilter-8.dll
+		Lib\avformat-59.dll = Lib\avformat-59.dll
+		Lib\avutil-57.dll = Lib\avutil-57.dll
+		Lib\postproc-56.dll = Lib\postproc-56.dll
+		Lib\swresample-4.dll = Lib\swresample-4.dll
+		Lib\swscale-6.dll = Lib\swscale-6.dll
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
 		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
 		{66C2EC87-62EC-4532-BC43-768A90F551B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{66C2EC87-62EC-4532-BC43-768A90F551B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{66C2EC87-62EC-4532-BC43-768A90F551B8}.Debug|x64.ActiveCfg = Debug|x64
+		{66C2EC87-62EC-4532-BC43-768A90F551B8}.Debug|x64.Build.0 = Debug|x64
 		{66C2EC87-62EC-4532-BC43-768A90F551B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{66C2EC87-62EC-4532-BC43-768A90F551B8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{66C2EC87-62EC-4532-BC43-768A90F551B8}.Release|x64.ActiveCfg = Release|x64
+		{66C2EC87-62EC-4532-BC43-768A90F551B8}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

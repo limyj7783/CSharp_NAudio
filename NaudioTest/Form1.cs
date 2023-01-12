@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -12,6 +13,8 @@ using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
+
+
 namespace NaudioTest
 {
     public partial class Form1 : Form
@@ -24,7 +27,9 @@ namespace NaudioTest
 
         bool is_record;
         WaveIn wave_source;
-        WaveFileWriter wave_file;
+        //WaveFileWriter wave_file;
+
+        FFMpegAACEncoder aac_encoder;
 
         public Form1()
         {
@@ -32,8 +37,10 @@ namespace NaudioTest
 
             enumerator = new MMDeviceEnumerator();
             policy_config = new PolicyConfigClient();
-            speakers = new List<MMDevice>();
+            speakers = new List<MMDevice>(); 
             mics = new List<MMDevice>();
+
+            aac_encoder = new FFMpegAACEncoder();
 
             // Get selected speaker and mic in Windows.
             MMDevice speaker = GetDefaultSpekaer();
@@ -135,12 +142,15 @@ namespace NaudioTest
                 return;
             is_record = true;
 
+            if (aac_encoder.InitEncoder() < 0)
+                aac_encoder.UninitEncoder();
+
             wave_source = new WaveIn();
-            wave_source.WaveFormat = new WaveFormat(44100, 1);
+            wave_source.WaveFormat = new WaveFormat(44100, 16, 1);
             wave_source.DataAvailable += new EventHandler<WaveInEventArgs>(waveSource_DataAvailable);
             wave_source.RecordingStopped += new EventHandler<StoppedEventArgs>(waveSource_RecordingStopped);
 
-            wave_file = new WaveFileWriter(@"C:\Users\cudo\source\repos\NaudioTest\NaudioTest\Test0001.wav", wave_source.WaveFormat);
+            //wave_file = new WaveFileWriter(@"C:\Project\CSharp_NAudio\Test0001.wav", wave_source.WaveFormat);
 
             wave_source.StartRecording();
         }
@@ -155,13 +165,17 @@ namespace NaudioTest
 
         void waveSource_DataAvailable(object sender, WaveInEventArgs e)
         {
+            /*
             if (wave_file != null)
             {
                 wave_file.Write(e.Buffer, 0, e.BytesRecorded);
-                wave_file.Flush();
+                wave_file.Flush(); 
             }
-        }
+            */
 
+            aac_encoder.PushData(e.Buffer, e.BytesRecorded);
+        }
+        
         void waveSource_RecordingStopped(object sender, StoppedEventArgs e)
         {
             if (wave_source != null)
@@ -170,12 +184,20 @@ namespace NaudioTest
                 wave_source = null;
             }
 
+            /*
             if (wave_file != null)
             {
                 wave_file.Dispose();
                 wave_file = null;
             }
+            */
+
+
+            aac_encoder.UninitEncoder();
         }
+
+
+
 
     }
 }
