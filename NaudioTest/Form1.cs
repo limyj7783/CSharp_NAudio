@@ -13,8 +13,6 @@ using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
-
-
 namespace NaudioTest
 {
     public partial class Form1 : Form
@@ -34,6 +32,8 @@ namespace NaudioTest
         public Form1()
         {
             InitializeComponent();
+
+            Console.WriteLine("FFMPEG version : " + FFmpeg.AutoGen.ffmpeg.av_version_info());
 
             enumerator = new MMDeviceEnumerator();
             policy_config = new PolicyConfigClient();
@@ -191,7 +191,6 @@ namespace NaudioTest
                 wave_file = null;
             }
             */
-
 
             aac_encoder.UninitEncoder();
         }
