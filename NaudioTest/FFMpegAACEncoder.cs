@@ -1,6 +1,4 @@
-﻿//#define FILE_WRITE
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -22,19 +20,14 @@ namespace NaudioTest
         AVPacket* pkt;
         int data_size;
 
+        //Resample
+        SwrContext* resampleContext;
+        byte** sourceData;
+        byte** destinationData;
+
         Queue<byte> audio_pcm_datas;
 
         byte[] aac_adts_header;
-
-        //test file write
-        WaveFileWriter wave_file;
-#if FILE_WRITE
-        FileStream fs;
-        BinaryWriter bw;
-#endif
-
-        //ffmpeg file write
-
 
         public FFMpegAACEncoder()
         {
@@ -46,16 +39,13 @@ namespace NaudioTest
             audio_pcm_datas = new Queue<byte>();
             aac_adts_header = new byte[7];
 
-            wave_file = new WaveFileWriter(@"C:\Project\CSharp_NAudio\Test0002.wav", new WaveFormat(44100, 16, 1));
-
-#if FILE_WRITE
-            fs = new FileStream(@"C:\Project\CSharp_NAudio\Test0002.aac", FileMode.Create, FileAccess.Write);
-            bw = new BinaryWriter(fs);
-#endif
+            if (InitEncoder() < 0)
+                UninitEncoder();
         }
 
         public int InitEncoder()
         {
+
             codec = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_AAC);
             if (codec == null)
             {
@@ -122,6 +112,13 @@ namespace NaudioTest
 
             data_size = ffmpeg.av_samples_get_buffer_size(null, codec_context->channels, frame->nb_samples, codec_context->sample_fmt, 0);
 
+            if (InitResample() < 0)
+                UninitResample();
+            return 0;
+        }
+
+        public int InitResample()
+        {
             return 0;
         }
 
@@ -226,101 +223,77 @@ namespace NaudioTest
 
                 codec_context = null;
             }
-#if FILE_WRITE
-            FileClose();
-#endif
+        }
+
+        private void UninitResample()
+        {
+
         }
 
         public unsafe int PushData(byte[] data, int length)
         {
-            for (int i = 0; i < length; i++)
-                audio_pcm_datas.Enqueue(data[i]);
-            encode();
+            Resample(data, length);
+            //for (int i = 0; i < length; i++)
+                //audio_pcm_datas.Enqueue(data[i]);
+            //encode();
+            return 0;
+        }
+
+        private int Resample(byte[] data, int length)
+        {
+
             return 0;
         }
 
         //private bool encode(AVCodecContext* ctx, AVFrame* frame, AVPacket* pkt)
-        private bool encode()
+        private int encode()
         {
-            byte[] pcm_data = new byte[data_size];
-            for(int i=0; i<data_size; i++)
-                pcm_data[i] = audio_pcm_datas.Dequeue();
-
-            wave_file.Write(pcm_data, 0, data_size);
-            wave_file.Flush();
-
-            int ret = 0;
-
-            ret = ffmpeg.av_frame_make_writable(frame);
-            if (ret < 0)
+            while(audio_pcm_datas.Count > data_size)
             {
-                Console.WriteLine("Error. av_frame_make_writable error code[" + ret + "]");
-                return false;
-            }
+                byte[] pcm_data = new byte[data_size];
+                for (int i = 0; i < data_size; i++)
+                    pcm_data[i] = audio_pcm_datas.Dequeue();
 
+                int ret = 0;
 
-            fixed(byte* ptr = pcm_data)
-            {
-                frame->data[0] = ptr;
-                ret = ffmpeg.avcodec_send_frame(codec_context, frame);
-            }
-            if (ret < 0)
-            {
-                Console.WriteLine("avcodec_send_frame fail [" + ret + "]");
-                return false;
-            }
-
-            while(ret >= 0)
-            {
-                ret = ffmpeg.avcodec_receive_packet(codec_context, pkt);
-                if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF)
-                    return true;
-                else if (ret < 0)
+                ret = ffmpeg.av_frame_make_writable(frame);
+                if (ret < 0)
                 {
-                    return false;
+                    Console.WriteLine("Error. av_frame_make_writable error code[" + ret + "]");
+                    return -1;
                 }
 
-                GetAACHeader(pkt);
+                fixed (byte* ptr = pcm_data)
+                {
+                    frame->data[0] = ptr;
+                    ret = ffmpeg.avcodec_send_frame(codec_context, frame);
+                }
+                if (ret < 0)
+                {
+                    Console.WriteLine("avcodec_send_frame fail [" + ret + "]");
+                    return -1;
+                }
 
-                byte[] data = new byte[pkt->size];
-                for (int i = 0; i < pkt->size; i++)
-                    data[i] = pkt->data[i];
+                while (ret >= 0)
+                {
+                    ret = ffmpeg.avcodec_receive_packet(codec_context, pkt);
+                    if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF) { }
+                    else if (ret < 0)
+                    {
+                        return -1;
+                    }
 
-#if FILE_WRITE
-                WriteFile(data);
-#endif
-                ffmpeg.av_packet_unref(pkt);
+                    GetAACHeader(pkt);
+
+                    byte[] data = new byte[pkt->size];
+                    for (int i = 0; i < pkt->size; i++)
+                        data[i] = pkt->data[i];
+                    ffmpeg.av_packet_unref(pkt);
+                }
             }
 
-            return true;
+            return 0;
         }
-
-#if FILE_WRITE
-        private void WriteFile(byte[] data)
-        {
-            
-            bw.Write(aac_adts_header);
-            bw.Write(data);
-
-            string file_name = @"C:\Project\CSharp_NAudio\test.aac";
-            using (FileStream fs = File.Open(file_name, FileMode.OpenOrCreate))
-            {
-
-                fs.Seek(0, SeekOrigin.End);
-                fs.Write(aac_adts_header, 0, aac_adts_header.Length);
-                fs.Seek(0, SeekOrigin.End);
-                fs.Write(data, 0, data.Length);
-            }
-        }
-#endif
-
-#if FILE_WRITE
-        public void FileClose()
-        {
-            bw.Close();
-            fs.Close();
-        }
-#endif
 
         private int GetAACHeader(AVPacket* pkt)
         {

@@ -35,6 +35,7 @@ namespace NaudioTest
             this.cb_Speaker = new System.Windows.Forms.ComboBox();
             this.btn_RecordStart = new System.Windows.Forms.Button();
             this.btn_Stop = new System.Windows.Forms.Button();
+            this.btn_FileEncoding = new System.Windows.Forms.Button();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.SuspendLayout();
@@ -83,7 +84,7 @@ namespace NaudioTest
             // 
             this.btn_RecordStart.Location = new System.Drawing.Point(43, 238);
             this.btn_RecordStart.Name = "btn_RecordStart";
-            this.btn_RecordStart.Size = new System.Drawing.Size(181, 52);
+            this.btn_RecordStart.Size = new System.Drawing.Size(100, 52);
             this.btn_RecordStart.TabIndex = 3;
             this.btn_RecordStart.Text = "녹음 시작";
             this.btn_RecordStart.UseVisualStyleBackColor = true;
@@ -91,19 +92,30 @@ namespace NaudioTest
             // 
             // btn_Stop
             // 
-            this.btn_Stop.Location = new System.Drawing.Point(230, 238);
+            this.btn_Stop.Location = new System.Drawing.Point(149, 238);
             this.btn_Stop.Name = "btn_Stop";
-            this.btn_Stop.Size = new System.Drawing.Size(181, 52);
+            this.btn_Stop.Size = new System.Drawing.Size(111, 52);
             this.btn_Stop.TabIndex = 4;
             this.btn_Stop.Text = "녹음 중지";
             this.btn_Stop.UseVisualStyleBackColor = true;
             this.btn_Stop.Click += new System.EventHandler(this.btn_Stop_Click);
+            // 
+            // btn_FileEncoding
+            // 
+            this.btn_FileEncoding.Location = new System.Drawing.Point(266, 238);
+            this.btn_FileEncoding.Name = "btn_FileEncoding";
+            this.btn_FileEncoding.Size = new System.Drawing.Size(111, 52);
+            this.btn_FileEncoding.TabIndex = 5;
+            this.btn_FileEncoding.Text = "파일 인코딩";
+            this.btn_FileEncoding.UseVisualStyleBackColor = true;
+            this.btn_FileEncoding.Click += new System.EventHandler(this.btn_FileEncoding_Click);
             // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(579, 302);
+            this.Controls.Add(this.btn_FileEncoding);
             this.Controls.Add(this.btn_Stop);
             this.Controls.Add(this.btn_RecordStart);
             this.Controls.Add(this.groupBox2);
@@ -124,6 +136,7 @@ namespace NaudioTest
         private System.Windows.Forms.ComboBox cb_Speaker;
         private System.Windows.Forms.Button btn_RecordStart;
         private System.Windows.Forms.Button btn_Stop;
+        private System.Windows.Forms.Button btn_FileEncoding;
     }
 }
 
