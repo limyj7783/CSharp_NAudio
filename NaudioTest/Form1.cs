@@ -28,7 +28,7 @@ namespace NaudioTest
 
         FFMpegAACEncoder aac_encoder;
 
-        BinaryWriter bw = new BinaryWriter(new FileStream(@"C:\Project\CSharp_NAudio\output.pcm", FileMode.Create, FileAccess.Write));
+        //BinaryWriter bw = new BinaryWriter(new FileStream(@"C:\Project\CSharp_NAudio\output.pcm", FileMode.Create, FileAccess.Write));
         WaveFileWriter wave_file;
 
         public Form1()
@@ -41,8 +41,6 @@ namespace NaudioTest
             policy_config = new PolicyConfigClient();
             speakers = new List<MMDevice>(); 
             mics = new List<MMDevice>();
-
-            aac_encoder = new FFMpegAACEncoder();
 
             // Get selected speaker and mic in Windows.
             MMDevice speaker = GetDefaultSpekaer();
@@ -144,6 +142,8 @@ namespace NaudioTest
         {
             if (is_record)
                 return;
+
+            aac_encoder = new FFMpegAACEncoder();
             is_record = true;
 
             wave_source = new WaveIn();
@@ -151,9 +151,9 @@ namespace NaudioTest
             wave_source.DataAvailable += new EventHandler<WaveInEventArgs>(waveSource_DataAvailable);
             wave_source.RecordingStopped += new EventHandler<StoppedEventArgs>(waveSource_RecordingStopped);
 
-            //wave_file = new WaveFileWriter(@"C:\Project\CSharp_NAudio\output.wav", wave_source.WaveFormat);
+            wave_file = new WaveFileWriter(@"C:\Project\CSharp_NAudio\output.wav", wave_source.WaveFormat);
             wave_source.StartRecording();
-
+            Console.WriteLine("녹음 시작");
         }
 
         //마이크로부터 입력 시작 EvnetHandler
@@ -164,6 +164,7 @@ namespace NaudioTest
 
             is_record = false;
             wave_source.StopRecording();
+            Console.WriteLine("녹음 중지");
         }
 
         //마이크로부터 입력 받는 데이터 처리 함수
@@ -172,9 +173,15 @@ namespace NaudioTest
             /*
             bw.Write(e.Buffer, 0, e.BytesRecorded);
             bw.Flush();
+            */
+
+            /* timestamp
+            var time_span = (DateTime.Now - new DateTime(1970, 1, 1, 0, 0, 0));
+            Console.WriteLine((long)time_span.TotalMilliseconds);
+            */
+
             wave_file.Write(e.Buffer, 0, e.BytesRecorded);
             wave_file.Flush();
-            */
             aac_encoder.PushData(e.Buffer, e.BytesRecorded);
         }
         
@@ -187,21 +194,22 @@ namespace NaudioTest
                 wave_source = null;
             }
 
-            bw.Close();
-
             aac_encoder.UninitEncoder();
         }
 
         private void btn_FileEncoding_Click(object sender, EventArgs e)
         {
-            using (BinaryReader br = new BinaryReader(new FileStream(@"C:\Project\CSharp_NAudio\sample.wav", FileMode.Open)))
+            using (BinaryReader br = new BinaryReader(File.Open(@"C:\Project\CSharp_NAudio\sample.pcm", FileMode.Open, FileAccess.Read, FileShare.Read)))
             {
                 int length = (int)br.BaseStream.Length;
 
                 byte[] data = new byte[length];
                 br.Read(data, 0, length);
-                int a = 0;
+
                 aac_encoder.PushData(data, length);
+
+
+                int a = 0;
             }
         }
     }

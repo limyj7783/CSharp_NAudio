@@ -13,31 +13,78 @@ namespace NaudioTest
 {
     public unsafe class FFMpegAACEncoder
     {
-        //FFMpeg
+        public bool isInit;
+
+        //FFMpeg Encoding
         AVCodec* codec;
         AVCodecContext* codec_context;
         AVFrame* frame;
         AVPacket* pkt;
         int data_size;
 
-        //Resample
+        //FFMpeg Resample
         SwrContext* resampleContext;
         byte** sourceData;
         byte** destinationData;
 
-        Queue<byte> audio_pcm_datas;
+        long sourceChannelLayout;
+        long destinationChannelLayout;
+        int sourceSampleRate;
+        int destinationSampleRate;
+        AVSampleFormat sourceSampleFormat;
+        AVSampleFormat destinationSampleFormat;
+        int sourceSamplesCount;
+        int sourceChannelsCount;
 
+        int destinationSampleCount;
+        int maxDestinationSampleCount;
+        int destinationLinesize;
+        int destinationChanelsCount;
+
+        //data buffer
+        Queue<byte> audio_raw_datas;
+        Queue<byte> audio_resampled_datas;
+
+        //adts header
         byte[] aac_adts_header;
+
+        BinaryWriter bw = new BinaryWriter(new FileStream(@"C:\Project\CSharp_NAudio\resampled.pcm", FileMode.Create, FileAccess.Write));
+        BinaryWriter aac_file = new BinaryWriter(new FileStream(@"C:\Project\CSharp_NAudio\output.aac", FileMode.Create, FileAccess.Write));
+        struct sample_fmt_entry
+        {
+            public AVSampleFormat sample_fmt;
+            public string fmt_be, fmt_le;
+        }
 
         public FFMpegAACEncoder()
         {
+            isInit = false;
+
             codec = null;
             codec_context = null;
             frame = null;
             pkt = null;
             data_size = 0;
-            audio_pcm_datas = new Queue<byte>();
+            audio_resampled_datas = new Queue<byte>();
+            audio_raw_datas = new Queue<byte>();
             aac_adts_header = new byte[7];
+
+            resampleContext = null;
+            sourceData = null;
+            destinationData = null;
+            sourceChannelLayout = (long)ffmpeg.AV_CH_LAYOUT_MONO;
+            destinationChannelLayout = (long)ffmpeg.AV_CH_LAYOUT_MONO;
+            sourceSampleRate = 44100;
+            destinationSampleRate = 44100;
+            sourceSampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S32;
+            destinationSampleFormat = AVSampleFormat.AV_SAMPLE_FMT_FLTP;
+            sourceSamplesCount = 1024;
+            sourceChannelsCount = 0;
+
+            destinationSampleCount = 0;
+            maxDestinationSampleCount = 0;
+            destinationLinesize = 0;
+            destinationChanelsCount = 0;
 
             if (InitEncoder() < 0)
                 UninitEncoder();
@@ -45,7 +92,6 @@ namespace NaudioTest
 
         public int InitEncoder()
         {
-
             codec = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_AAC);
             if (codec == null)
             {
@@ -71,7 +117,7 @@ namespace NaudioTest
 
             /* select other audio parameters supported by the encoder */
             codec_context->sample_rate = SelectSampleRate(codec);
-            codec_context->channel_layout = SelectChannelLayout(codec);
+            codec_context->channel_layout = ffmpeg.AV_CH_LAYOUT_MONO;// SelectChannelLayout(codec);
             codec_context->channels = ffmpeg.av_get_channel_layout_nb_channels(codec_context->channel_layout);
 
             int ret = 0;
@@ -114,11 +160,76 @@ namespace NaudioTest
 
             if (InitResample() < 0)
                 UninitResample();
+
+            isInit = true;
             return 0;
         }
 
         public int InitResample()
-        {
+        {            
+            /* Create resampler context */
+            resampleContext = ffmpeg.swr_alloc();
+            if (resampleContext == null)
+            {
+                Console.Error.Write("Error. Could not allocate resampler context\n");
+                return -1;
+            }
+
+            /* Set options */
+            ffmpeg.av_opt_set_int(resampleContext, "in_channel_layout", sourceChannelLayout, 0);
+            ffmpeg.av_opt_set_int(resampleContext, "in_sample_rate", sourceSampleRate, 0);
+            ffmpeg.av_opt_set_sample_fmt(resampleContext, "in_sample_fmt", sourceSampleFormat, 0);
+
+            ffmpeg.av_opt_set_int(resampleContext, "out_channel_layout", destinationChannelLayout, 0);
+            ffmpeg.av_opt_set_int(resampleContext, "out_sample_rate", destinationSampleRate, 0);
+            ffmpeg.av_opt_set_sample_fmt(resampleContext, "out_sample_fmt", destinationSampleFormat, 0);
+
+            int ret = 0;
+            /* Initialize the resampling context */
+            ret = ffmpeg.swr_init(resampleContext);
+            if (ret < 0)
+            {
+                Console.Error.Write("Error. Failed to initialize the resampling context\n");
+                return -1;
+            }
+
+            /* Allocate source and destination samples buffers */
+            int sourceLinesize;
+            sourceChannelsCount = ffmpeg.av_get_channel_layout_nb_channels((ulong)sourceChannelLayout);
+            fixed(byte*** _source_data = &sourceData)
+            {
+                ret = ffmpeg.av_samples_alloc_array_and_samples(_source_data, &sourceLinesize, sourceChannelsCount,
+                                                         sourceSamplesCount, sourceSampleFormat, 0);
+                if (ret < 0)
+                {
+                    Console.Error.Write("Error. Could not allocate source samples\n");
+                    return -1;
+                }
+            }
+
+            /* Compute the number of converted samples: buffering is avoided
+             * ensuring that the output buffer will contain at least all the
+             * converted input samples */
+            destinationSampleCount =
+                (int)ffmpeg.av_rescale_rnd(sourceSamplesCount, destinationSampleRate, sourceSampleRate, AVRounding.AV_ROUND_UP);
+            maxDestinationSampleCount = destinationSampleCount;
+
+            /* Buffer is going to be directly written to a rawaudio file, no alignment */
+            destinationChanelsCount = ffmpeg.av_get_channel_layout_nb_channels((ulong)destinationChannelLayout);
+            fixed(byte*** _dst_data = &destinationData)
+            {
+                fixed(int* _dst_line_size = &destinationLinesize)
+                {
+                    ret = ffmpeg.av_samples_alloc_array_and_samples(_dst_data, _dst_line_size, destinationChanelsCount,
+                                             destinationSampleCount, destinationSampleFormat, 0);
+                    if (ret < 0)
+                    {
+                        Console.Error.Write("Error. Could not allocate destination samples\n");
+                        return -1;
+                    }
+                }
+            }
+
             return 0;
         }
 
@@ -223,24 +334,121 @@ namespace NaudioTest
 
                 codec_context = null;
             }
+
+            UninitResample();
+
+            isInit = false;
         }
 
         private void UninitResample()
         {
+            if(sourceData != null)
+            {
+                ffmpeg.av_freep(&sourceData[0]);
+                fixed(byte*** _src_data = &sourceData)
+                {
+                    ffmpeg.av_freep(_src_data);
+                }
+                sourceData = null;
+            }
 
+            if(destinationData != null)
+            {
+                ffmpeg.av_freep(&destinationData[0]);
+                fixed(byte*** _dst_data = &destinationData)
+                {
+                    ffmpeg.av_freep(_dst_data);
+                }
+                destinationData = null;
+            }
+
+            if(resampleContext != null)
+            {
+                fixed(SwrContext** _resample_context = &resampleContext)
+                {
+                    ffmpeg.swr_free(_resample_context);
+                }
+                resampleContext = null;
+            }
         }
 
-        public unsafe int PushData(byte[] data, int length)
+        public unsafe int PushData(byte[] raw_data, int length)
         {
-            Resample(data, length);
+            Resample(raw_data, length);
             //for (int i = 0; i < length; i++)
                 //audio_pcm_datas.Enqueue(data[i]);
             //encode();
             return 0;
         }
 
-        private int Resample(byte[] data, int length)
+
+        //FillSamples((double*) sourceData[0], sourceSamplesCount, sourceChannelsCount, sourceSampleRate, &toneLevel);
+        private void FillSamples(byte* src_data)
         {
+            for(int i=0; i < sourceSamplesCount; i++)
+            {
+                src_data[i] = audio_raw_datas.Dequeue();
+            }
+        }
+
+        private int Resample(byte[] raw_data, int length)
+        {
+            for (int i = 0; i < length; i++)
+                audio_raw_datas.Enqueue(raw_data[i]);
+
+            while (audio_raw_datas.Count > sourceSamplesCount)
+            {
+                FillSamples((byte*)sourceData[0]);
+
+                int ret = 0;
+                /* Compute destination number of samples */
+                destinationSampleCount = (int)ffmpeg.av_rescale_rnd(ffmpeg.swr_get_delay(resampleContext, sourceSampleRate) +
+                                                sourceSamplesCount, destinationSampleRate, sourceSampleRate, AVRounding.AV_ROUND_UP);
+                if (destinationSampleCount > maxDestinationSampleCount)
+                {
+                    ffmpeg.av_freep(&destinationData[0]);
+                    fixed (int* _dst_line_size = &destinationLinesize)
+                    {
+                        ret = ffmpeg.av_samples_alloc(destinationData, _dst_line_size, destinationChanelsCount,
+                                               destinationSampleCount, destinationSampleFormat, 1);
+                    }
+                    if (ret < 0)
+                    {
+                        return -1;
+                    }
+
+                    maxDestinationSampleCount = destinationSampleCount;
+                }
+
+                /* Convert to destination format */
+                ret = ffmpeg.swr_convert(resampleContext, destinationData, destinationSampleCount, sourceData, sourceSamplesCount);
+                if (ret < 0)
+                {
+                    Console.Error.Write("Error while converting\n");
+                    return -1;
+                }
+
+                /*
+                int destinationBufferSize = 0;
+                fixed (int* _dst_line_size = &destinationLinesize)
+                {
+                    destinationBufferSize = ffmpeg.av_samples_get_buffer_size(_dst_line_size, destinationChanelsCount,
+                                                             ret, destinationSampleFormat, 1);
+                }
+                if (destinationBufferSize < 0)
+                {
+                    Console.Error.Write("Could not get sample buffer size\n");
+                    return -1;
+                }
+                */
+
+                for(int i=0; i< ret; i++)
+                {
+                    bw.Write(destinationData[0][i]);
+                    audio_resampled_datas.Enqueue(destinationData[0][i]);
+                }
+                encode();
+            }
 
             return 0;
         }
@@ -248,11 +456,11 @@ namespace NaudioTest
         //private bool encode(AVCodecContext* ctx, AVFrame* frame, AVPacket* pkt)
         private int encode()
         {
-            while(audio_pcm_datas.Count > data_size)
+            while (audio_resampled_datas.Count >= data_size)
             {
                 byte[] pcm_data = new byte[data_size];
                 for (int i = 0; i < data_size; i++)
-                    pcm_data[i] = audio_pcm_datas.Dequeue();
+                    pcm_data[i] = audio_resampled_datas.Dequeue();
 
                 int ret = 0;
 
@@ -277,18 +485,29 @@ namespace NaudioTest
                 while (ret >= 0)
                 {
                     ret = ffmpeg.avcodec_receive_packet(codec_context, pkt);
-                    if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF) { }
+                    if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF)
+                    {
+                        Console.WriteLine("--------->");
+                    }
                     else if (ret < 0)
                     {
+                        Console.Error.WriteLine("Error. avcodec_receive_packet fail. error_code[" + ret + "]");
                         return -1;
                     }
+                    else
+                    {
+                        GetAACHeader(pkt);
 
-                    GetAACHeader(pkt);
+                        byte[] data = new byte[pkt->size];
+                        for (int i = 0; i < pkt->size; i++)
+                            data[i] = pkt->data[i];
 
-                    byte[] data = new byte[pkt->size];
-                    for (int i = 0; i < pkt->size; i++)
-                        data[i] = pkt->data[i];
-                    ffmpeg.av_packet_unref(pkt);
+                        aac_file.Write(aac_adts_header);
+                        aac_file.Write(data);
+                        aac_file.Flush();
+
+                        ffmpeg.av_packet_unref(pkt);
+                    }
                 }
             }
 
@@ -297,12 +516,12 @@ namespace NaudioTest
 
         private int GetAACHeader(AVPacket* pkt)
         {
-            int profile = 2;        //AAC LC
-            int freqIdx = 11;       //8000Hz
+            int profile = 1;
+            int freqIdx = 4;
             int chanCfg = 1;        //MPEG-4 Audio Channel Configuration. 1 Channel front-center
 
             aac_adts_header[0] = (byte)0xFF;      // 11111111     = syncword  
-            aac_adts_header[1] = (byte)0xF9;      // 1111 1 00 1  = syncword MPEG-2 Layer CRC  
+            aac_adts_header[1] = (byte)0xF1;      // 1111 1 00 1  = syncword MPEG-2 Layer CRC  
             aac_adts_header[2] = (byte)(((profile - 1) << 6) + (freqIdx << 2) + (chanCfg >> 2));
             aac_adts_header[3] = (byte)(((chanCfg & 3) << 6) + ((7 + pkt->size) >> 11));
             aac_adts_header[4] = (byte)(((7 + pkt->size) & 0x7FF) >> 3);
@@ -311,5 +530,28 @@ namespace NaudioTest
             return 0;
         }
 
+        static int getFormatFromSampleFormat(out string fmt, AVSampleFormat sample_fmt)
+        {
+            var sample_fmt_entries = new[]{
+                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_U8,  fmt_be = "u8",    fmt_le = "u8"    },
+                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_S16, fmt_be = "s16be", fmt_le = "s16le" },
+                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_S32, fmt_be = "s32be", fmt_le = "s32le" },
+                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_FLT, fmt_be = "f32be", fmt_le = "f32le" },
+                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_DBL, fmt_be = "f64be", fmt_le = "f64le" },
+            };
+            fmt = null;
+            for (var i = 0; i < sample_fmt_entries.Length; i++)
+            {
+                var entry = sample_fmt_entries[i];
+                if (sample_fmt == entry.sample_fmt)
+                {
+                    fmt = ffmpeg.AV_HAVE_BIGENDIAN != 0 ? entry.fmt_be : entry.fmt_le;
+                    return 0;
+                }
+            }
+
+            Console.Error.WriteLine($"Sample format {ffmpeg.av_get_sample_fmt_name(sample_fmt)} not supported as output format");
+            return ffmpeg.AVERROR(ffmpeg.EINVAL);
+        }
     }
 }
