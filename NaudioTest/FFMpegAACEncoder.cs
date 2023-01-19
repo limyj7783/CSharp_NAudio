@@ -1,4 +1,4 @@
-﻿#define FILE_WRITE
+﻿//#define FILE_WRITE
 
 using System;
 using System.Collections.Generic;
@@ -49,6 +49,7 @@ namespace ViewLiveClientMain._2nd_Dev
 
         //adts header
         byte[] aac_adts_header;
+        const int aac_adts_header_length = 7;
 
 #if FILE_WRITE
         //file dump
@@ -61,15 +62,17 @@ namespace ViewLiveClientMain._2nd_Dev
         long pts;
         int time_scale;
 
-        public FFMpegAACEncoder(int sample_rate, int bit, int channels)
+        RtspClientSender rtsp_sender;
+
+        public FFMpegAACEncoder(int sample_rate, int bit_aligned, int channels)
         {
 #if FILE_WRITE
             string file_path = Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.FullName;
             pcm_file = new BinaryWriter(new FileStream(file_path + @"\resampled.pcm", FileMode.Create, FileAccess.Write));
             aac_file = new BinaryWriter(new FileStream(file_path + @"\output.aac", FileMode.Create, FileAccess.Write));
-            wave_file = new WaveFileWriter(file_path + @"\output.wav", new WaveFormat(sample_rate, bit, channels));
+            wave_file = new WaveFileWriter(file_path + @"\output.wav", new WaveFormat(sample_rate, bit_aligned, channels));
 #endif
-            Console.WriteLine("Info. AAC Encoder samplerate[" + sample_rate + "], bit[" + bit + "], channels[" + channels + "]");
+            Console.WriteLine("Info. AAC Encoder samplerate[" + sample_rate + "], bit[" + bit_aligned + "], channels[" + channels + "]");
 
             isInit = false;
 
@@ -80,7 +83,7 @@ namespace ViewLiveClientMain._2nd_Dev
             data_size = 0;
             audio_resampled_datas = new Queue<byte>();
             audio_raw_datas = new Queue<byte>();
-            aac_adts_header = new byte[7];
+            aac_adts_header = new byte[aac_adts_header_length];
 
             resampleContext = null;
             sourceData = null;
@@ -98,13 +101,13 @@ namespace ViewLiveClientMain._2nd_Dev
             sourceSampleRate = sample_rate;
             destinationSampleRate = 44100;
 
-            if(bit == 32)
+            if(bit_aligned == 32)
             {
                 sourceSampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S32;
             }
             else
             {
-                Console.Error.WriteLine("Error. not support bit. bit[" + bit + "]");
+                Console.Error.WriteLine("Error. not support bit. bit[" + bit_aligned + "]");
                 return;
             }
 
@@ -131,6 +134,14 @@ namespace ViewLiveClientMain._2nd_Dev
             {
                 UninitEncoder();
                 Console.Error.WriteLine("Error. Initailze AAC Encoder Failed.");
+                return;
+            }
+
+            rtsp_sender = new RtspClientSender("127.0.0.1", 8554);
+            
+            if(rtsp_sender.Initialize(AVMediaType.AVMEDIA_TYPE_AUDIO, AVCodecID.AV_CODEC_ID_AAC, codec_context->sample_rate, (int)codec_context->channel_layout, bit_aligned, codec_context->extradata, codec_context->extradata_size) < 0)
+            {
+                rtsp_sender.Uninitalize();
                 return;
             }
 
@@ -167,6 +178,8 @@ namespace ViewLiveClientMain._2nd_Dev
 #endif
             UninitResample();
             UninitEncoder();
+
+            rtsp_sender.Uninitalize();
 
             isInit = false;
 
@@ -482,7 +495,7 @@ namespace ViewLiveClientMain._2nd_Dev
                 FillSamples((byte*)sourceData[0]);
 
                 pts = pts + (long)sourceSamplesCount;
-                //timescale = samplerate;
+                time_scale = codec_context->sample_rate;
 
                 int ret = 0;
                 /* Compute destination number of samples */
@@ -540,7 +553,6 @@ namespace ViewLiveClientMain._2nd_Dev
             return 0;
         }
 
-        //private bool encode(AVCodecContext* ctx, AVFrame* frame, AVPacket* pkt)
         private int encode(long pts)
         {
             while (audio_resampled_datas.Count >= data_size)
@@ -585,13 +597,22 @@ namespace ViewLiveClientMain._2nd_Dev
                     {
                         if(GetAACHeader(pkt) == 0)
                         {
-                            byte[] data = new byte[pkt->size];
-                            for (int i = 0; i < pkt->size; i++)
-                                data[i] = pkt->data[i];
+                            byte[] data = new byte[pkt->size + aac_adts_header_length];
+                            for (int i = 0; i < aac_adts_header_length; i++)
+                                data[i] = aac_adts_header[i];
+
+                            for (int i = aac_adts_header_length; i < pkt->size + aac_adts_header_length; i++)
+                                data[i] = pkt->data[i - aac_adts_header_length];
+
+                            fixed(byte* _data = data)
+                            {
+                                rtsp_sender.SendStream(_data, data.Length, pts, pts, time_scale);
+                            }
+
 #if FILE_WRITE
                             if(aac_file != null)
                             {
-                                aac_file.Write(aac_adts_header);
+                                //aac_file.Write(aac_adts_header);
                                 aac_file.Write(data);
                                 aac_file.Flush();
                             }
@@ -633,8 +654,8 @@ namespace ViewLiveClientMain._2nd_Dev
             aac_adts_header[1] = (byte)0xF1;      // 1111 1 00 1  = syncword MPEG-2 Layer CRC  
             aac_adts_header[2] = (byte)(((profile - 1) << 6) + (freqIdx << 2) + (chanCfg >> 2));
             aac_adts_header[3] = (byte)(((chanCfg & 3) << 6) + ((7 + pkt->size) >> 11));
-            aac_adts_header[4] = (byte)(((7 + pkt->size) & 0x7FF) >> 3);
-            aac_adts_header[5] = (byte)((((7 + pkt->size) & 7) << 5) + 0x1F);
+            aac_adts_header[4] = (byte)(((aac_adts_header_length + pkt->size) & 0x7FF) >> 3);
+            aac_adts_header[5] = (byte)((((aac_adts_header_length + pkt->size) & 7) << 5) + 0x1F);
             aac_adts_header[6] = (byte)0xFC;
             return 0;
         }

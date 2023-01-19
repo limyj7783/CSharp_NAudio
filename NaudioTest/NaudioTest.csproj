@@ -116,6 +116,8 @@
     <Compile Include="PolicyConfigClient.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RtspClientSender.cs" />
+    <Compile Include="RtspClientWrapper.cs" />
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.cs</DependentUpon>
     </EmbeddedResource>
