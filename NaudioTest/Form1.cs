@@ -13,6 +13,8 @@ using System.Runtime.InteropServices;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 
+using ViewLiveClientMain._2nd_Dev;
+
 namespace NaudioTest
 {
     public partial class Form1 : Form
@@ -26,10 +28,10 @@ namespace NaudioTest
         bool is_record;
         WaveIn wave_source;
 
-        FFMpegAACEncoder aac_encoder;
-
         //BinaryWriter bw = new BinaryWriter(new FileStream(@"C:\Project\CSharp_NAudio\output.pcm", FileMode.Create, FileAccess.Write));
         WaveFileWriter wave_file;
+
+        Mic mic_device;
 
         public Form1()
         {
@@ -54,6 +56,8 @@ namespace NaudioTest
             // Select speaker and mic in Windows
             SelectSpeaker(speaker);
             SelectMic(mic);
+
+            mic_device = new Mic();
         }
 
         private void GetSpeakers()
@@ -142,18 +146,8 @@ namespace NaudioTest
         {
             if (is_record)
                 return;
-
-            aac_encoder = new FFMpegAACEncoder();
             is_record = true;
-
-            wave_source = new WaveIn();
-            wave_source.WaveFormat = new WaveFormat(44100, 32, 1);
-            wave_source.DataAvailable += new EventHandler<WaveInEventArgs>(waveSource_DataAvailable);
-            wave_source.RecordingStopped += new EventHandler<StoppedEventArgs>(waveSource_RecordingStopped);
-
-            wave_file = new WaveFileWriter(@"C:\Project\CSharp_NAudio\output.wav", wave_source.WaveFormat);
-            wave_source.StartRecording();
-            Console.WriteLine("녹음 시작");
+            mic_device.StartInputAudioFromMic();
         }
 
         //마이크로부터 입력 시작 EvnetHandler
@@ -163,54 +157,7 @@ namespace NaudioTest
                 return;
 
             is_record = false;
-            wave_source.StopRecording();
-            Console.WriteLine("녹음 중지");
-        }
-
-        //마이크로부터 입력 받는 데이터 처리 함수
-        void waveSource_DataAvailable(object sender, WaveInEventArgs e)
-        {
-            /*
-            bw.Write(e.Buffer, 0, e.BytesRecorded);
-            bw.Flush();
-            */
-
-            /* timestamp
-            var time_span = (DateTime.Now - new DateTime(1970, 1, 1, 0, 0, 0));
-            Console.WriteLine((long)time_span.TotalMilliseconds);
-            */
-
-            wave_file.Write(e.Buffer, 0, e.BytesRecorded);
-            wave_file.Flush();
-            aac_encoder.PushData(e.Buffer, e.BytesRecorded);
-        }
-        
-        //마이크로부터 입력 중지 시 처리 함수
-        void waveSource_RecordingStopped(object sender, StoppedEventArgs e)
-        {
-            if (wave_source != null)
-            {
-                wave_source.Dispose();
-                wave_source = null;
-            }
-
-            aac_encoder.UninitEncoder();
-        }
-
-        private void btn_FileEncoding_Click(object sender, EventArgs e)
-        {
-            using (BinaryReader br = new BinaryReader(File.Open(@"C:\Project\CSharp_NAudio\sample.pcm", FileMode.Open, FileAccess.Read, FileShare.Read)))
-            {
-                int length = (int)br.BaseStream.Length;
-
-                byte[] data = new byte[length];
-                br.Read(data, 0, length);
-
-                aac_encoder.PushData(data, length);
-
-
-                int a = 0;
-            }
+            mic_device.StopInputAudioFromMic();
         }
     }
 }

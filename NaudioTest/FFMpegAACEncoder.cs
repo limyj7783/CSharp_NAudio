@@ -1,4 +1,6 @@
-﻿using System;
+﻿#define FILE_WRITE
+
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -9,11 +11,11 @@ using FFmpeg.AutoGen;
 using NAudio.Wave;
 using System.Runtime.InteropServices;
 
-namespace NaudioTest
+namespace ViewLiveClientMain._2nd_Dev
 {
     public unsafe class FFMpegAACEncoder
     {
-        public bool isInit;
+        bool isInit;
 
         //FFMpeg Encoding
         AVCodec* codec;
@@ -48,16 +50,27 @@ namespace NaudioTest
         //adts header
         byte[] aac_adts_header;
 
-        BinaryWriter bw = new BinaryWriter(new FileStream(@"C:\Project\CSharp_NAudio\resampled.pcm", FileMode.Create, FileAccess.Write));
-        BinaryWriter aac_file = new BinaryWriter(new FileStream(@"C:\Project\CSharp_NAudio\output.aac", FileMode.Create, FileAccess.Write));
-        struct sample_fmt_entry
-        {
-            public AVSampleFormat sample_fmt;
-            public string fmt_be, fmt_le;
-        }
+#if FILE_WRITE
+        //file dump
+        BinaryWriter pcm_file;
+        BinaryWriter aac_file;
+        WaveFileWriter wave_file;
+#endif
 
-        public FFMpegAACEncoder()
+        //pts
+        long pts;
+        int time_scale;
+
+        public FFMpegAACEncoder(int sample_rate, int bit, int channels)
         {
+#if FILE_WRITE
+            string file_path = Directory.GetParent(Environment.CurrentDirectory).Parent.Parent.Parent.FullName;
+            pcm_file = new BinaryWriter(new FileStream(file_path + @"\resampled.pcm", FileMode.Create, FileAccess.Write));
+            aac_file = new BinaryWriter(new FileStream(file_path + @"\output.aac", FileMode.Create, FileAccess.Write));
+            wave_file = new WaveFileWriter(file_path + @"\output.wav", new WaveFormat(sample_rate, bit, channels));
+#endif
+            Console.WriteLine("Info. AAC Encoder samplerate[" + sample_rate + "], bit[" + bit + "], channels[" + channels + "]");
+
             isInit = false;
 
             codec = null;
@@ -72,11 +85,29 @@ namespace NaudioTest
             resampleContext = null;
             sourceData = null;
             destinationData = null;
-            sourceChannelLayout = (long)ffmpeg.AV_CH_LAYOUT_MONO;
+
+            if (channels == 1)
+                sourceChannelLayout = (long)ffmpeg.AV_CH_LAYOUT_MONO;
+            else
+            {
+                Console.Error.WriteLine("Error. not support channel. channels[" + channels + "]");
+                return;
+            }
+
             destinationChannelLayout = (long)ffmpeg.AV_CH_LAYOUT_MONO;
-            sourceSampleRate = 44100;
+            sourceSampleRate = sample_rate;
             destinationSampleRate = 44100;
-            sourceSampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S32;
+
+            if(bit == 32)
+            {
+                sourceSampleFormat = AVSampleFormat.AV_SAMPLE_FMT_S32;
+            }
+            else
+            {
+                Console.Error.WriteLine("Error. not support bit. bit[" + bit + "]");
+                return;
+            }
+
             destinationSampleFormat = AVSampleFormat.AV_SAMPLE_FMT_FLTP;
             sourceSamplesCount = 1024;
             sourceChannelsCount = 0;
@@ -86,11 +117,63 @@ namespace NaudioTest
             destinationLinesize = 0;
             destinationChanelsCount = 0;
 
+            pts = 0;
+            time_scale = 0;
+
+            if (InitResample() < 0)
+            {
+                UninitResample();
+                Console.Error.WriteLine("Error. Initialize Resampler Failed.");
+                return;
+            }
+
             if (InitEncoder() < 0)
+            {
                 UninitEncoder();
+                Console.Error.WriteLine("Error. Initailze AAC Encoder Failed.");
+                return;
+            }
+
+            isInit = true;
+            Console.WriteLine("Info. Initialize success AAC Encoder.");
         }
 
-        public int InitEncoder()
+        public bool IsInitailze()
+        {
+            return isInit;
+        }
+
+        public void Uninitalize()
+        {
+#if FILE_WRITE
+            if(pcm_file != null)
+            {
+                pcm_file.Close();
+                pcm_file.Dispose();
+                pcm_file = null;
+            }
+            if(aac_file != null)
+            {
+                aac_file.Close();
+                aac_file.Dispose();
+                aac_file = null;
+            }
+            if(wave_file != null)
+            {
+                wave_file.Close();
+                wave_file.Dispose();
+                wave_file = null;
+            }
+#endif
+            UninitResample();
+            UninitEncoder();
+
+            isInit = false;
+
+            Console.WriteLine("Info. Uninitalize AAC Encoder OK.");
+        }
+
+        private int InitEncoder()
         {
             codec = ffmpeg.avcodec_find_encoder(AVCodecID.AV_CODEC_ID_AAC);
             if (codec == null)
@@ -103,7 +186,7 @@ namespace NaudioTest
             if (codec_context == null)
             {
                 Console.WriteLine("Error. avcodec_alloc_context3 function call fail. codec_context is null");
-                return -2;
+                return -1;
             }
 
 
@@ -112,12 +195,12 @@ namespace NaudioTest
             if (CheckSampleFmt(codec, codec_context->sample_fmt) == 0)
             {
                 Console.WriteLine("Error. SampleFormat Unknown");
-                return -3;
+                return -1;
             }
 
             /* select other audio parameters supported by the encoder */
-            codec_context->sample_rate = SelectSampleRate(codec);
-            codec_context->channel_layout = ffmpeg.AV_CH_LAYOUT_MONO;// SelectChannelLayout(codec);
+            codec_context->sample_rate = destinationSampleRate; //SelectSampleRate(codec);
+            codec_context->channel_layout = (ulong)destinationChannelLayout; // ffmpeg.AV_CH_LAYOUT_MONO;// SelectChannelLayout(codec);
             codec_context->channels = ffmpeg.av_get_channel_layout_nb_channels(codec_context->channel_layout);
 
             int ret = 0;
@@ -126,7 +209,7 @@ namespace NaudioTest
             if (ret < 0)
             {
                 Console.WriteLine("Error. avcodec_open2 fail. error code["+ret+"]");
-                return -4;
+                return -1;
             }
 
             /* packet for holding encoded output */
@@ -134,7 +217,7 @@ namespace NaudioTest
             if (pkt == null)
             {
                 Console.WriteLine("Error. av_packet_alloc function call fail. pkt is null");
-                return -5;
+                return -1;
             }
 
             /* frame containing input raw audio */
@@ -142,7 +225,7 @@ namespace NaudioTest
             if (frame == null)
             {
                 Console.WriteLine("Error. av_frame_alloc function call fail. frame is null");
-                return -6;
+                return -1;
             }
 
             frame->nb_samples = codec_context->frame_size;
@@ -153,19 +236,14 @@ namespace NaudioTest
             if (ret < 0)
             {
                 Console.WriteLine("Error. av_frame_get_buffer function fall. error code[" + ret + "]");
-                return -7;
+                return -1;
             }
 
             data_size = ffmpeg.av_samples_get_buffer_size(null, codec_context->channels, frame->nb_samples, codec_context->sample_fmt, 0);
-
-            if (InitResample() < 0)
-                UninitResample();
-
-            isInit = true;
             return 0;
         }
 
-        public int InitResample()
+        private int InitResample()
         {            
             /* Create resampler context */
             resampleContext = ffmpeg.swr_alloc();
@@ -305,7 +383,7 @@ namespace NaudioTest
             return best_ch_layout;
         }
 
-        public unsafe void UninitEncoder()
+        private unsafe void UninitEncoder()
         {
             if (frame != null)
             {
@@ -335,9 +413,7 @@ namespace NaudioTest
                 codec_context = null;
             }
 
-            UninitResample();
-
-            isInit = false;
+            Console.WriteLine("Info. Uninitialize Encoder.");
         }
 
         private void UninitResample()
@@ -370,10 +446,15 @@ namespace NaudioTest
                 }
                 resampleContext = null;
             }
+            Console.WriteLine("Info. Uninitialize Resampler.");
         }
 
         public unsafe int PushData(byte[] raw_data, int length)
         {
+#if FILE_WRITE
+            if(wave_file != null)
+                wave_file.Write(raw_data, 0, length);
+#endif
             Resample(raw_data, length);
             //for (int i = 0; i < length; i++)
                 //audio_pcm_datas.Enqueue(data[i]);
@@ -399,6 +480,9 @@ namespace NaudioTest
             while (audio_raw_datas.Count > sourceSamplesCount)
             {
                 FillSamples((byte*)sourceData[0]);
+
+                pts = pts + (long)sourceSamplesCount;
+                //timescale = samplerate;
 
                 int ret = 0;
                 /* Compute destination number of samples */
@@ -444,17 +528,20 @@ namespace NaudioTest
 
                 for(int i=0; i< ret; i++)
                 {
-                    bw.Write(destinationData[0][i]);
+#if FILE_WRITE
+                    if(pcm_file != null)
+                        pcm_file.Write(destinationData[0][i]);
+#endif
                     audio_resampled_datas.Enqueue(destinationData[0][i]);
                 }
-                encode();
+                encode(pts);
             }
 
             return 0;
         }
 
         //private bool encode(AVCodecContext* ctx, AVFrame* frame, AVPacket* pkt)
-        private int encode()
+        private int encode(long pts)
         {
             while (audio_resampled_datas.Count >= data_size)
             {
@@ -474,6 +561,7 @@ namespace NaudioTest
                 fixed (byte* ptr = pcm_data)
                 {
                     frame->data[0] = ptr;
+                    frame->pts = pts;
                     ret = ffmpeg.avcodec_send_frame(codec_context, frame);
                 }
                 if (ret < 0)
@@ -487,7 +575,6 @@ namespace NaudioTest
                     ret = ffmpeg.avcodec_receive_packet(codec_context, pkt);
                     if (ret == ffmpeg.AVERROR(ffmpeg.EAGAIN) || ret == ffmpeg.AVERROR_EOF)
                     {
-                        Console.WriteLine("--------->");
                     }
                     else if (ret < 0)
                     {
@@ -496,18 +583,22 @@ namespace NaudioTest
                     }
                     else
                     {
-                        GetAACHeader(pkt);
-
-                        byte[] data = new byte[pkt->size];
-                        for (int i = 0; i < pkt->size; i++)
-                            data[i] = pkt->data[i];
-
-                        aac_file.Write(aac_adts_header);
-                        aac_file.Write(data);
-                        aac_file.Flush();
-
-                        ffmpeg.av_packet_unref(pkt);
+                        if(GetAACHeader(pkt) == 0)
+                        {
+                            byte[] data = new byte[pkt->size];
+                            for (int i = 0; i < pkt->size; i++)
+                                data[i] = pkt->data[i];
+#if FILE_WRITE
+                            if(aac_file != null)
+                            {
+                                aac_file.Write(aac_adts_header);
+                                aac_file.Write(data);
+                                aac_file.Flush();
+                            }
+#endif
+                        }
                     }
+                    ffmpeg.av_packet_unref(pkt);
                 }
             }
 
@@ -517,8 +608,26 @@ namespace NaudioTest
         private int GetAACHeader(AVPacket* pkt)
         {
             int profile = 1;
-            int freqIdx = 4;
-            int chanCfg = 1;        //MPEG-4 Audio Channel Configuration. 1 Channel front-center
+            //int freqIdx = 4;
+            //int chanCfg = 1;
+            int freqIdx = -1;
+            if (codec_context != null)
+                freqIdx = GetAACFreqIdx(codec_context->sample_rate);
+
+            int chanCfg = -1;
+            if (codec_context != null)
+                chanCfg = GetAACChannelConfig(codec_context->channel_layout);
+
+            if(freqIdx == -1)
+            {
+                Console.Error.WriteLine("Error. Unknown AAC Frequencie.");
+                return -1;
+            }
+            if(chanCfg == -1)
+            {
+                Console.Error.WriteLine("Error. Unknown AAC Channel Configuration.");
+                return -1;
+            }
 
             aac_adts_header[0] = (byte)0xFF;      // 11111111     = syncword  
             aac_adts_header[1] = (byte)0xF1;      // 1111 1 00 1  = syncword MPEG-2 Layer CRC  
@@ -530,28 +639,59 @@ namespace NaudioTest
             return 0;
         }
 
-        static int getFormatFromSampleFormat(out string fmt, AVSampleFormat sample_fmt)
+        //https://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Sampling_Frequencies
+        private int GetAACFreqIdx(int sample_rate)
         {
-            var sample_fmt_entries = new[]{
-                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_U8,  fmt_be = "u8",    fmt_le = "u8"    },
-                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_S16, fmt_be = "s16be", fmt_le = "s16le" },
-                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_S32, fmt_be = "s32be", fmt_le = "s32le" },
-                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_FLT, fmt_be = "f32be", fmt_le = "f32le" },
-                new sample_fmt_entry{ sample_fmt = AVSampleFormat.AV_SAMPLE_FMT_DBL, fmt_be = "f64be", fmt_le = "f64le" },
-            };
-            fmt = null;
-            for (var i = 0; i < sample_fmt_entries.Length; i++)
-            {
-                var entry = sample_fmt_entries[i];
-                if (sample_fmt == entry.sample_fmt)
-                {
-                    fmt = ffmpeg.AV_HAVE_BIGENDIAN != 0 ? entry.fmt_be : entry.fmt_le;
-                    return 0;
-                }
-            }
+            if (sample_rate == 96000)
+                return 0;
+            else if (sample_rate == 88200)
+                return 1;
+            else if (sample_rate == 64000)
+                return 2;
+            else if (sample_rate == 48000)
+                return 3;
+            else if (sample_rate == 44100)
+                return 4;
+            else if (sample_rate == 32000)
+                return 5;
+            else if (sample_rate == 24000)
+                return 6;
+            else if (sample_rate == 22050)
+                return 7;
+            else if (sample_rate == 16000)
+                return 8;
+            else if (sample_rate == 12000)
+                return 9;
+            else if (sample_rate == 11025)
+                return 10;
+            else if (sample_rate == 8000)
+                return 11;
+            else if (sample_rate == 7350)
+                return 12;
+            else
+                return -1;
+        }
 
-            Console.Error.WriteLine($"Sample format {ffmpeg.av_get_sample_fmt_name(sample_fmt)} not supported as output format");
-            return ffmpeg.AVERROR(ffmpeg.EINVAL);
+        //https://wiki.multimedia.cx/index.php?title=MPEG-4_Audio#Channel_Configurations
+        //https://ffmpeg.org/doxygen/2.4/group__channel__mask__c.html#ga53d6da2dcd56f5f87c7afd8b33fa15ba
+        private int GetAACChannelConfig(ulong channels_layout)
+        {
+            if (channels_layout == ffmpeg.AV_CH_LAYOUT_MONO)
+                return 1;
+            else if (channels_layout == ffmpeg.AV_CH_LAYOUT_STEREO)
+                return 2;
+            else if (channels_layout == ffmpeg.AV_CH_LAYOUT_SURROUND)
+                return 3;
+            else if (channels_layout == ffmpeg.AV_CH_LAYOUT_4POINT0)
+                return 4;
+            else if (channels_layout == ffmpeg.AV_CH_LAYOUT_5POINT0_BACK)
+                return 5;
+            else if (channels_layout == ffmpeg.AV_CH_LAYOUT_5POINT1_BACK)
+                return 6;
+            else if (channels_layout == ffmpeg.AV_CH_LAYOUT_7POINT1_WIDE_BACK)
+                return 7;
+            else
+                return -1;
         }
     }
 }

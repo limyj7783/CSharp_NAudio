@@ -112,6 +112,7 @@
       <DependentUpon>Form1.cs</DependentUpon>
     </Compile>
     <Compile Include="IPolicyConfig.cs" />
+    <Compile Include="Mic.cs" />
     <Compile Include="PolicyConfigClient.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
