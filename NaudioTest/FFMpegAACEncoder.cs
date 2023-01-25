@@ -23,6 +23,7 @@ namespace ViewLiveClientMain._2nd_Dev
         AVFrame* frame;
         AVPacket* pkt;
         int data_size;
+        int bit_aligned;
 
         //FFMpeg Resample
         SwrContext* resampleContext;
@@ -84,6 +85,7 @@ namespace ViewLiveClientMain._2nd_Dev
             audio_resampled_datas = new Queue<byte>();
             audio_raw_datas = new Queue<byte>();
             aac_adts_header = new byte[aac_adts_header_length];
+            this.bit_aligned = bit_aligned;
 
             resampleContext = null;
             sourceData = null;
@@ -137,14 +139,6 @@ namespace ViewLiveClientMain._2nd_Dev
                 return;
             }
 
-            rtsp_sender = new RtspClientSender("127.0.0.1", 8554);
-            
-            if(rtsp_sender.Initialize(AVMediaType.AVMEDIA_TYPE_AUDIO, AVCodecID.AV_CODEC_ID_AAC, codec_context->sample_rate, (int)codec_context->channel_layout, bit_aligned, codec_context->extradata, codec_context->extradata_size) < 0)
-            {
-                rtsp_sender.Uninitalize();
-                return;
-            }
-
             isInit = true;
             Console.WriteLine("Info. Initialize success AAC Encoder.");
         }
@@ -179,7 +173,8 @@ namespace ViewLiveClientMain._2nd_Dev
             UninitResample();
             UninitEncoder();
 
-            rtsp_sender.Uninitalize();
+            if(rtsp_sender != null)
+                rtsp_sender.Uninitalize();
 
             isInit = false;
 
@@ -319,6 +314,34 @@ namespace ViewLiveClientMain._2nd_Dev
                         return -1;
                     }
                 }
+            }
+
+            return 0;
+        }
+
+        public int InitRtspClientSender(string rtsp_url)
+        {
+            if(String.IsNullOrEmpty(rtsp_url))
+            {
+                Console.Error.WriteLine("Error. Invalid Rtsp url.");
+                return -1;
+            }
+
+            if(codec_context != null)
+            {
+                rtsp_sender = new RtspClientSender(rtsp_url);
+
+                if (rtsp_sender.Initialize(AVMediaType.AVMEDIA_TYPE_AUDIO, AVCodecID.AV_CODEC_ID_AAC, codec_context->sample_rate,
+                    (int)codec_context->channel_layout, bit_aligned, codec_context->extradata, codec_context->extradata_size) < 0)
+                {
+                    Console.Error.WriteLine("Error. Rtsp client sender create failed.");
+                    rtsp_sender.Uninitalize();
+                    return -1;
+                }
+            }
+            else
+            {
+                Console.Error.WriteLine("Error. Rtsp client sender create failed. Unknown codec context.");
             }
 
             return 0;
@@ -604,9 +627,12 @@ namespace ViewLiveClientMain._2nd_Dev
                             for (int i = aac_adts_header_length; i < pkt->size + aac_adts_header_length; i++)
                                 data[i] = pkt->data[i - aac_adts_header_length];
 
-                            fixed(byte* _data = data)
+                            if(rtsp_sender != null)
                             {
-                                rtsp_sender.SendStream(_data, data.Length, pts, pts, time_scale);
+                                fixed (byte* _data = data)
+                                {
+                                    rtsp_sender.SendStream(_data, data.Length, pts, pts, time_scale);
+                                }
                             }
 
 #if FILE_WRITE

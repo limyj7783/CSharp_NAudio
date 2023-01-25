@@ -17,7 +17,21 @@ namespace ViewLiveClientMain._2nd_Dev
 
         FFMpegAACEncoder aac_encoder;
 
+        string rtsp_url;
+
         public Mic()
+        {
+            Initalize();
+            rtsp_url = "";
+        }
+
+        public Mic(string rtsp_url)
+        {
+            Initalize();
+            this.rtsp_url = rtsp_url;
+        }
+
+        private void Initalize()
         {
             aac_encoder = null;
             wave_source = null;
@@ -30,6 +44,7 @@ namespace ViewLiveClientMain._2nd_Dev
         public int StartInputAudioFromMic()
         {
             aac_encoder = new FFMpegAACEncoder(sample_rate, bit, channels);
+            aac_encoder.InitRtspClientSender(rtsp_url);
 
             wave_source = new WaveIn();
             wave_source.WaveFormat = new WaveFormat(sample_rate, bit, channels);
