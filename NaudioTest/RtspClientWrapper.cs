@@ -45,7 +45,6 @@ namespace ViewLiveClientMain._2nd_Dev
         private Dictionary<int, int> m_map_info = new Dictionary<int, int>();
 
         private object lockObj = new object();
-        private bool is_started_stream;
 
         public RtspClientWrapper(string rtsp_url, EN_LOG_LEVEL_TYPE loglevel)
 		{
@@ -53,7 +52,6 @@ namespace ViewLiveClientMain._2nd_Dev
             {
                 m_rtsp_url = rtsp_url;
             }
-            is_started_stream = false;
             ffmpeg_load(loglevel);
         }
 
@@ -269,8 +267,9 @@ namespace ViewLiveClientMain._2nd_Dev
                         }
                     }
 
-                    int time = timeout_msec * 1000;
-                    ret = ffmpeg.av_dict_set(&dicts, "stimeout", time.ToString(), 0);
+                    //int time = timeout_msec;
+                    string value = timeout_msec.ToString();
+                    ret = ffmpeg.av_dict_set(&dicts, "timeout", value, 0);
                     if (ret >= 0)
                     {
                         Console.WriteLine($"tcp_timeout option is ON");
@@ -296,9 +295,7 @@ namespace ViewLiveClientMain._2nd_Dev
                     Console.WriteLine($"udp transport option is ON");
                 }
 
-                Console.WriteLine($"avformat_write_header before");
                 ret = ffmpeg.avformat_write_header(m_outFormatCtx, &dicts);
-                Console.WriteLine($"avformat_write_header after");
                 if (ret < 0)
                 {
                     byte[] errorBuff = new byte[ffmpeg.AV_ERROR_MAX_STRING_SIZE];
@@ -309,8 +306,6 @@ namespace ViewLiveClientMain._2nd_Dev
                         return ret;
                     }
                 }
-
-                is_started_stream = true;
             }
 
             return 0;
@@ -437,8 +432,6 @@ namespace ViewLiveClientMain._2nd_Dev
                 if (m_map_info.Count > 0)
                     m_map_info.Clear();
 
-                is_started_stream = false;
-
                 ffmpeg_rtsp_client_deinit();
             }
         }
@@ -461,11 +454,6 @@ namespace ViewLiveClientMain._2nd_Dev
                 ffmpeg.avformat_free_context(m_outFormatCtx);
                 m_outFormatCtx = null;
             }
-        }
-
-        public bool IsStartedStream()
-        {
-            return is_started_stream;
         }
     }
 }

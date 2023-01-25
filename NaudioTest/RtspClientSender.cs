@@ -18,7 +18,7 @@ namespace ViewLiveClientMain._2nd_Dev
         RtspClientWrapper streamer;
         EN_SUPPORTABLE_CODEC_TYPE audio_codec;
 
-        bool isInit;
+        bool is_init;
         int input_stream_index;
 
 #if RTSP_FILE_DUMP
@@ -33,7 +33,7 @@ namespace ViewLiveClientMain._2nd_Dev
             aac_file = new BinaryWriter(new FileStream(file_path + @"\rtsp_input.aac", FileMode.Create, FileAccess.Write));
 #endif
             Console.WriteLine("Info. Rtsp client sender [" + rtsp_url + "]");
-            isInit = false;
+            is_init = false;
             input_stream_index = 0;
             //string sunapi_uri = @"/profile1/media.smp";
             //string sunapi_uri = @"/profile1/media";
@@ -81,7 +81,7 @@ namespace ViewLiveClientMain._2nd_Dev
             }
 
             Console.WriteLine("Info. Rtsp client sender Inialize OK.");
-            isInit = true;
+            is_init = true;
             return 0;
         }
 
@@ -89,7 +89,7 @@ namespace ViewLiveClientMain._2nd_Dev
         {
             Console.WriteLine("Info. Rtsp client sender Uninitalize.");
             StopStream();
-            isInit = false;
+            is_init = false;
 #if RTSP_FILE_DUMP
             aac_file.Close();
 #endif
@@ -97,7 +97,7 @@ namespace ViewLiveClientMain._2nd_Dev
 
         public bool IsInitalize()
         {
-            return isInit;
+            return is_init;
         }
 
         private int StartStream()
@@ -124,7 +124,7 @@ namespace ViewLiveClientMain._2nd_Dev
             }
 #endif
             //Console.WriteLine("===========> Debug. pts[" + pts + "] dts[" + dts + "] timescale[" + time_scale + "]");
-            if (streamer == null || audio_codec != EN_SUPPORTABLE_CODEC_TYPE.EN_SUPPORTABLE_CODEC_TYPE_AAC ||
+            if (streamer == null || audio_codec != EN_SUPPORTABLE_CODEC_TYPE.EN_SUPPORTABLE_CODEC_TYPE_AAC || 
                 streamer.SendStream(input_stream_index, audio_codec, data, data_size, pts, dts, time_scale) < 0)
             {
                 Console.Error.WriteLine("Error. Send Stream failed,");

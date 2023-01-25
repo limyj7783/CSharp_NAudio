@@ -57,9 +57,9 @@ namespace NaudioTest
             SelectSpeaker(speaker);
             SelectMic(mic);
 
-            mic_device = new Mic("rtsp://127.0.0.1:8554/stream");
+            //mic_device = new Mic("rtsp://127.0.0.1:8554/stream");
 
-            //mic_device = new Mic("rtsp://127.0.0.1:554/stream");
+            mic_device = new Mic("rtsp://127.0.0.1:554/stream");
         }
 
         private void GetSpeakers()
