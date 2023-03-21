@@ -61,6 +61,20 @@ namespace ViewLiveClientMain._2nd_Dev
                         return -1;
                     }
                 }
+                else if (avcodec == AVCodecID.AV_CODEC_ID_PCM_MULAW)
+                {
+                    audio_codec = EN_SUPPORTABLE_CODEC_TYPE.EN_SUPPORTABLE_CODEC_TYPE_PCM;
+
+                    if (streamer.AddAudioStream(input_stream_index, audio_codec, sample_rate, channel, bits_aligned, extra_data, extra_data_size) == 0)
+                    {
+                        Console.WriteLine("Info. Success to add a audio stream infomation.");
+                    }
+                    else
+                    {
+                        Console.Error.WriteLine("Error. failed to add a audio stream information");
+                        return -1;
+                    }
+                }
                 else
                 {
                     Console.Error.WriteLine("Error. Unknown audio codec.");
@@ -124,7 +138,7 @@ namespace ViewLiveClientMain._2nd_Dev
             }
 #endif
             //Console.WriteLine("===========> Debug. pts[" + pts + "] dts[" + dts + "] timescale[" + time_scale + "]");
-            if (streamer == null || audio_codec != EN_SUPPORTABLE_CODEC_TYPE.EN_SUPPORTABLE_CODEC_TYPE_AAC || 
+            if (streamer == null || audio_codec != EN_SUPPORTABLE_CODEC_TYPE.EN_SUPPORTABLE_CODEC_TYPE_PCM || 
                 streamer.SendStream(input_stream_index, audio_codec, data, data_size, pts, dts, time_scale) < 0)
             {
                 Console.Error.WriteLine("Error. Send Stream failed,");

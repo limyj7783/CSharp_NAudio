@@ -22,7 +22,8 @@ namespace ViewLiveClientMain._2nd_Dev
     public enum EN_SUPPORTABLE_CODEC_TYPE
     {
         EN_SUPPORTABLE_CODEC_TYPE_UNKNOWN = 0,
-        EN_SUPPORTABLE_CODEC_TYPE_AAC
+        EN_SUPPORTABLE_CODEC_TYPE_AAC,
+        EN_SUPPORTABLE_CODEC_TYPE_PCM
     }
 
     public enum EN_LOG_LEVEL_TYPE
@@ -191,6 +192,10 @@ namespace ViewLiveClientMain._2nd_Dev
                         input_codec = AVCodecID.AV_CODEC_ID_AAC;
                         media_type = AVMediaType.AVMEDIA_TYPE_AUDIO;
                         break;
+                    case EN_SUPPORTABLE_CODEC_TYPE.EN_SUPPORTABLE_CODEC_TYPE_PCM:
+                        input_codec = AVCodecID.AV_CODEC_ID_PCM_MULAW;
+                        media_type = AVMediaType.AVMEDIA_TYPE_AUDIO;
+                        break;
                     default:
                         Console.WriteLine($"Not supported codec type - {codec}");
                         break;
@@ -220,6 +225,8 @@ namespace ViewLiveClientMain._2nd_Dev
                     st->codecpar->sample_rate = sample_rate;
                     st->codecpar->channels = channel;
                     st->time_base.den = sample_rate;
+                    //st->codecpar->format = (int)AVSampleFormat.AV_SAMPLE_FMT_U8;
+                    //st->codecpar->bits_per_raw_sample = 8;
                     st->time_base.num = 1;
                     if (extra_data != null && extra_data_size > 0)
                     {

@@ -57,9 +57,12 @@ namespace NaudioTest
             SelectSpeaker(speaker);
             SelectMic(mic);
 
+            //textBox1.Text = "rtsp://127.0.0.1:8554/stream";
             //mic_device = new Mic("rtsp://127.0.0.1:8554/stream");
 
-            mic_device = new Mic("rtsp://127.0.0.1:554/stream");
+            //mic_device = new Mic("rtsp://127.0.0.1:554/stream");
+
+            //mic_device = new Mic("rtsp://106.245.226.42:50001/listen/mobile01");
         }
 
         private void GetSpeakers()
@@ -146,6 +149,7 @@ namespace NaudioTest
         //마이크로부터 입력 시작 EvnetHandler
         private void btn_RecordStart_Click(object sender, EventArgs e)
         {
+            mic_device = new Mic(textBox1.Text);
             if (is_record)
                 return;
             is_record = true;

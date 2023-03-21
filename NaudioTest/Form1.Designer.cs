@@ -35,6 +35,7 @@ namespace NaudioTest
             this.cb_Speaker = new System.Windows.Forms.ComboBox();
             this.btn_RecordStart = new System.Windows.Forms.Button();
             this.btn_Stop = new System.Windows.Forms.Button();
+            this.textBox1 = new System.Windows.Forms.TextBox();
             this.groupBox1.SuspendLayout();
             this.groupBox2.SuspendLayout();
             this.SuspendLayout();
@@ -81,7 +82,7 @@ namespace NaudioTest
             // 
             // btn_RecordStart
             // 
-            this.btn_RecordStart.Location = new System.Drawing.Point(43, 238);
+            this.btn_RecordStart.Location = new System.Drawing.Point(43, 300);
             this.btn_RecordStart.Name = "btn_RecordStart";
             this.btn_RecordStart.Size = new System.Drawing.Size(100, 52);
             this.btn_RecordStart.TabIndex = 3;
@@ -91,7 +92,7 @@ namespace NaudioTest
             // 
             // btn_Stop
             // 
-            this.btn_Stop.Location = new System.Drawing.Point(149, 238);
+            this.btn_Stop.Location = new System.Drawing.Point(149, 300);
             this.btn_Stop.Name = "btn_Stop";
             this.btn_Stop.Size = new System.Drawing.Size(111, 52);
             this.btn_Stop.TabIndex = 4;
@@ -99,11 +100,20 @@ namespace NaudioTest
             this.btn_Stop.UseVisualStyleBackColor = true;
             this.btn_Stop.Click += new System.EventHandler(this.btn_Stop_Click);
             // 
+            // textBox1
+            // 
+            this.textBox1.Location = new System.Drawing.Point(43, 242);
+            this.textBox1.Name = "textBox1";
+            this.textBox1.Size = new System.Drawing.Size(504, 21);
+            this.textBox1.TabIndex = 5;
+            this.textBox1.Text = "rtsp://106.245.226.42:50001/listen/mobile01";
+            // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(579, 302);
+            this.ClientSize = new System.Drawing.Size(579, 364);
+            this.Controls.Add(this.textBox1);
             this.Controls.Add(this.btn_Stop);
             this.Controls.Add(this.btn_RecordStart);
             this.Controls.Add(this.groupBox2);
@@ -113,6 +123,7 @@ namespace NaudioTest
             this.groupBox1.ResumeLayout(false);
             this.groupBox2.ResumeLayout(false);
             this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
 
@@ -124,6 +135,7 @@ namespace NaudioTest
         private System.Windows.Forms.ComboBox cb_Speaker;
         private System.Windows.Forms.Button btn_RecordStart;
         private System.Windows.Forms.Button btn_Stop;
+        private System.Windows.Forms.TextBox textBox1;
     }
 }
 
